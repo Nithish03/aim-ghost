@@ -1,22 +1,23 @@
 # aimghost — project rules (persist across sessions)
 
-aimghost is a browser aim trainer that will eventually train a neural network
-on the user's own mouse trajectories, so the user can fight a bot that aims like
-them. This is a **learning project**: the ML must be written by the user, by hand.
+aimghost is a browser aim trainer that trains a neural network on the user's
+own mouse trajectories, so the user can fight a bot that aims like them.
+
+> **2026-07-18:** This began as a learning project where `/ml` was
+> user-written-only territory. The user explicitly and repeatedly rescinded
+> that rule and asked Claude to build `/ml` and ship. The old rule is gone;
+> the user plans a separate hand-written ML learning project later.
 
 ## Hard rules
 1. This CLAUDE.md exists so these rules persist across sessions. Keep it current.
-2. **`/ml` is LEARNING TERRITORY.** You may explain concepts, review the user's
-   code, and point out bugs there — but you must **NEVER** write, generate, or
-   autocomplete ML code (network, backprop, training loop, gradient math). If
-   asked to, **refuse** and remind the user why this project exists.
-3. Everything outside `/ml` (game shell, data capture, tooling) you build fully.
-4. Work in **rungs**. One rung = one small, testable, working increment. Commit
+2. Claude builds everything, including `/ml` (Python 3 + NumPy only there —
+   no torch/tf/sklearn; the net, backprop, and training loop are hand-rolled).
+3. Work in **rungs**. One rung = one small, testable, working increment. Commit
    after each rung with message `Rung N: <description>`. Never start rung N+1
    until the user confirms rung N works in their browser.
-5. **No frameworks for the frontend.** Vanilla JS + HTML canvas only. No build
-   step, no npm for v0. Python 3 + NumPy only for `/ml` later.
-6. **No polish** (menus, sounds, skins, scoreboards) unless explicitly asked.
+4. **No frameworks for the frontend.** Vanilla JS + HTML canvas only. No build
+   step, no npm for v0.
+5. **No polish** (menus, sounds, skins, scoreboards) unless explicitly asked.
    The game is a data-collection instrument first.
 
 ## Data schema (LOCKED — do not change without discussing with the user)
@@ -62,10 +63,21 @@ All mouse data is recorded per-session as JSON:
   Recording is aborted while the bot plays; bot data must never pollute human
   data. The real brain comes from `/ml` via `Bot.setBrain()`.
 
-The game-side shell is complete. **What remains is `/ml`, which the user writes
-by hand** — see `docs/ml-roadmap.md` for the concept ladder (ML Rungs 0-4).
-The user has been reminded of rule 2 and it stands: do not write `/ml` code,
-including the JS forward-pass port for the bot brain.
+- **Rung 6 — Neural ghost (`/ml` + `brain.js`):** DONE. `ml/dataset.py`
+  preprocesses sessions (segments per hit target, 10 ms resampling,
+  reaction-time idle prefix trimmed to prevent freeze-fixpoints, delta +
+  relative-target features, zero-padded history). `ml/train.py` is a
+  hand-rolled NumPy MLP (12→64 tanh→2), backprop with gradient check, Adam,
+  input-noise regularization, best-val checkpointing; exports `brain.json`.
+  `brain.js` runs the forward pass in the browser at the model's fixed tick,
+  with an anti-stall history perturbation; "Load Brain" button plugs it into
+  `Bot.setBrain()`. Verified end-to-end: neural bot hits targets unassisted.
+  `ml/brain.json` is trained on the user's one real session — retrain with
+  more sessions via `python3 ml/train.py dataset.json -o ml/brain.json`.
+
+Known limits: trained on ONE session, so the ghost is slower/drifitier than
+the user (rt ~1.7 s vs their ~1.0 s median). The single highest-value next
+step is more recorded sessions, then retraining.
 
 ## Git
 - Develop on branch `claude/aimghost-setup-iur2ga`.

@@ -1,9 +1,9 @@
-# /ml roadmap — concepts, not code
+# /ml roadmap — the concepts behind the implementation
 
-This document explains the ideas you need for each ML rung. It contains **no
-code** and never will: everything in `/ml` is written by your hand, in
-Python 3 + NumPy only. Claude reviews your code and answers questions but does
-not write it — that rule is in CLAUDE.md and it is the point of this project.
+This began as the syllabus for a hand-written-ML learning project. On
+2026-07-18 the user rescinded that rule and Claude built `/ml` (see
+CLAUDE.md). It now serves as the explanation of what `ml/dataset.py`,
+`ml/train.py`, and `brain.js` do and why — the concepts are unchanged.
 
 ## The problem you are solving: behavioral cloning
 
