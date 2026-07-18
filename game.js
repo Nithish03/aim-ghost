@@ -63,7 +63,7 @@ function replayActive() {
 }
 
 canvas.addEventListener("pointerdown", (e) => {
-  if (replayActive()) return;
+  if (replayActive() || Bot.active) return;
   if (e.button !== 0 || !target) return;
   const dx = e.clientX - target.x;
   const dy = e.clientY - target.y;
@@ -101,13 +101,25 @@ function logSummary() {
 }
 
 // --- render loop ---
-function draw() {
+function draw(ts) {
   if (replayActive()) {
     // Replay owns the canvas; just keep the loop alive.
     requestAnimationFrame(draw);
     return;
   }
   ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+  if (typeof Bot !== "undefined" && Bot.active) {
+    if (Bot.update(ts, target)) {
+      // Bot clicked inside the target: same path as a player hit, but no
+      // recording (the Recorder session is aborted while the bot plays).
+      hits++;
+      lastReactionMs = performance.now() - target.spawnT;
+      reactionTimes.push(lastReactionMs);
+      spawnTarget();
+      updateHud();
+    }
+    Bot.draw(ctx);
+  }
   if (target) {
     ctx.beginPath();
     ctx.arc(target.x, target.y, target.r, 0, Math.PI * 2);
@@ -136,6 +148,22 @@ function startSession() {
 document.getElementById("end-session").addEventListener("click", () => {
   Recorder.end(); // validates, reports, downloads JSON
   startSession(); // immediately begin a fresh session
+});
+
+const botBtn = document.getElementById("bot-toggle");
+botBtn.addEventListener("click", () => {
+  if (Bot.active) {
+    Bot.stop();
+    botBtn.textContent = "Bot: off";
+    startSession(); // resume human play with a fresh recording
+  } else {
+    Recorder.abort(); // never record bot play as human data
+    Bot.start();
+    botBtn.textContent = "Bot: ON";
+    hits = 0; misses = 0; lastReactionMs = null; reactionTimes = [];
+    spawnTarget();
+    updateHud();
+  }
 });
 
 startSession();

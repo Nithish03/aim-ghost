@@ -46,21 +46,26 @@ All mouse data is recorded per-session as JSON:
 - Clicks are recorded in the trajectory via `buttons` bitmask **and** as target
   outcomes.
 
-## Rung ladder (this session)
-- **Rung 1 — Game shell:** full-screen canvas, one circular target at a time
-  spawning at random positions, click destroys it and spawns the next,
-  miss-clicks counted. HUD shows hits, misses, accuracy %, last reaction time
-  (spawn_t to hit). Console-log a summary every 10 targets.
-- **Rung 2 — Data capture:** implement the schema above. Record continuously
-  while a session is active. "End Session" button downloads the JSON. Validate
-  no time-travel (`t_ms` strictly increasing) before download; report sample
-  rate achieved.
-- **Rung 3 — Ghost replay:** replay mode loads a session JSON and redraws the
-  cursor path as a fading trail over the original target positions, in real time
-  at 1x. Verifies data is clean; first "ghost" visual.
+## Rung ladder — status
+- **Rung 1 — Game shell:** DONE, user-confirmed. Canvas, targets, HUD.
+- **Rung 2 — Data capture:** DONE, user-confirmed. Schema implemented in
+  `recorder.js`; End Session validates monotonic t_ms + downloads JSON. A real
+  user session validated clean (~123 Hz while moving).
+- **Rung 3 — Ghost replay:** DONE, user-confirmed. `replay.js` — Load Replay
+  button, fading trail, 1x playback, click rings.
+- **Rung 4 — Dataset tooling:** `tools/merge_sessions.py` (stdlib-only CLI)
+  validates and merges session JSONs into `dataset.json`. Sessions stay
+  separate — never concatenate trajectories across time bases.
+- **Rung 5 — Bot arena plumbing:** `bot.js` — ghost cursor plays the live game
+  via pluggable `brain(state, dt) -> {dx, dy, click}` (contract documented in
+  bot.js). Default brain = straight-line mover (plumbing test / baseline).
+  Recording is aborted while the bot plays; bot data must never pollute human
+  data. The real brain comes from `/ml` via `Bot.setBrain()`.
 
-Stop after Rung 3. Ask the user to play a full session and confirm the exported
-JSON looks sane before proposing anything further.
+The game-side shell is complete. **What remains is `/ml`, which the user writes
+by hand** — see `docs/ml-roadmap.md` for the concept ladder (ML Rungs 0-4).
+The user has been reminded of rule 2 and it stands: do not write `/ml` code,
+including the JS forward-pass port for the bot brain.
 
 ## Git
 - Develop on branch `claude/aimghost-setup-iur2ga`.
