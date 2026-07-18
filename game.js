@@ -52,6 +52,7 @@ function spawnTarget() {
     r,
     spawnT: performance.now(),
   };
+  Recorder.onTargetSpawn(target);
 }
 
 // --- input ---
@@ -63,6 +64,7 @@ canvas.addEventListener("pointerdown", (e) => {
     hits++;
     lastReactionMs = performance.now() - target.spawnT;
     reactionTimes.push(lastReactionMs);
+    Recorder.onTargetEnd(target, "hit");
     spawnTarget();
     if (hits % 10 === 0) logSummary();
   } else {
@@ -108,6 +110,21 @@ function draw() {
   requestAnimationFrame(draw);
 }
 
-spawnTarget();
-updateHud();
+// --- session control ---
+function startSession() {
+  hits = 0;
+  misses = 0;
+  lastReactionMs = null;
+  reactionTimes = [];
+  Recorder.start();
+  spawnTarget();
+  updateHud();
+}
+
+document.getElementById("end-session").addEventListener("click", () => {
+  Recorder.end(); // validates, reports, downloads JSON
+  startSession(); // immediately begin a fresh session
+});
+
+startSession();
 requestAnimationFrame(draw);
