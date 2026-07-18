@@ -56,7 +56,14 @@ function spawnTarget() {
 }
 
 // --- input ---
+// Replay is defined in replay.js, which loads after this script; a frame or
+// event can fire in between, so check it exists before touching it.
+function replayActive() {
+  return typeof Replay !== "undefined" && Replay.active;
+}
+
 canvas.addEventListener("pointerdown", (e) => {
+  if (replayActive()) return;
   if (e.button !== 0 || !target) return;
   const dx = e.clientX - target.x;
   const dy = e.clientY - target.y;
@@ -95,6 +102,11 @@ function logSummary() {
 
 // --- render loop ---
 function draw() {
+  if (replayActive()) {
+    // Replay owns the canvas; just keep the loop alive.
+    requestAnimationFrame(draw);
+    return;
+  }
   ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
   if (target) {
     ctx.beginPath();

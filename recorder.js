@@ -8,14 +8,18 @@ const Recorder = (() => {
   let session = null; // { session_id, started_at, t0, targets, trajectory }
   let refreshHintHz = null;
 
-  // Estimate display refresh rate from rAF deltas (median of ~60 frames).
+  // Estimate display refresh rate from rAF deltas. Skip the first second
+  // (page-load jank makes early frames slow) and take the median of the next
+  // 120 frames.
   (function measureRefresh() {
     const deltas = [];
     let last = null;
+    let start = null;
     function tick(ts) {
-      if (last !== null) deltas.push(ts - last);
+      if (start === null) start = ts;
+      if (last !== null && ts - start > 1000) deltas.push(ts - last);
       last = ts;
-      if (deltas.length < 60) {
+      if (deltas.length < 120) {
         requestAnimationFrame(tick);
       } else {
         deltas.sort((a, b) => a - b);
@@ -156,5 +160,11 @@ const Recorder = (() => {
     session = null;
   }
 
-  return { start, end, onTargetSpawn, onTargetEnd };
+  // Discard the current session without downloading (used when entering
+  // replay mode, so replay mouse movement doesn't pollute a recording).
+  function abort() {
+    session = null;
+  }
+
+  return { start, end, abort, onTargetSpawn, onTargetEnd };
 })();

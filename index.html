@@ -14,8 +14,14 @@
     <span>acc: <b id="hud-acc">–</b></span>
     <span>last rt: <b id="hud-rt">–</b></span>
   </div>
-  <button id="end-session">End Session</button>
+  <div id="controls">
+    <button id="end-session">End Session</button>
+    <button id="load-replay">Load Replay</button>
+    <button id="back-to-game" hidden>Back to Game</button>
+  </div>
+  <input type="file" id="replay-file" accept=".json,application/json" hidden>
   <script src="recorder.js"></script>
   <script src="game.js"></script>
+  <script src="replay.js"></script>
 </body>
 </html>
