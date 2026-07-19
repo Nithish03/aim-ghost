@@ -72,7 +72,7 @@ def calibrate_out_scale(params, norm, user_px_ms):
     """
     lo, hi = 0.3, 1.2
     best = 1.0
-    for _ in range(12):
+    for _ in range(7):
         mid = (lo + hi) / 2
         r = evaluate(params, norm, out_scale=mid)
         if r["reach_rate"] < 1.0 or r["median_px_ms"] is None:

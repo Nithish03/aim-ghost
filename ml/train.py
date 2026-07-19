@@ -150,6 +150,12 @@ def train_model(sessions, epochs=EPOCHS, verbose=True):
             best_epoch = epoch
         if epoch % 25 == 0 or epoch == 1:
             log(f"epoch {epoch:4d}  train {ep_loss / n:.5f}  val {va_loss:.5f}")
+        # Early stopping: best val is typically found in the first ~50 epochs;
+        # on a 0.1-CPU cloud host the saved time is the difference between
+        # responding and the proxy timing out.
+        if epoch - best_epoch >= 50:
+            log(f"early stop at epoch {epoch} (no val improvement since {best_epoch})")
+            break
     params = best_params
     W1, b1, W2, b2 = params
     log(f"keeping epoch {best_epoch} weights (best val {best_val:.5f})")
