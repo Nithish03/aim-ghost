@@ -221,8 +221,9 @@ trainBtn.addEventListener("click", async () => {
     }
     if (!res.ok) throw new Error(data.error || "server error " + res.status);
     Bot.setBrain(BrainLoader.build(data));
+    window.lastBrain = data; // uploadable via Upload Ghost
     document.getElementById("load-brain").textContent = "Brain: yours";
-    alert("Ghost trained on your play. Press \"Duel\" to fight yourself.");
+    alert("Ghost trained on your play. Press \"Duel\" to fight yourself,\nor \"Upload Ghost\" to challenge your friends with it.");
   } catch (err) {
     alert("Training failed: " + err.message +
           "\n(Are you running via server.py? Static hosting can't train.)");
@@ -321,6 +322,52 @@ document.getElementById("fps-apply").addEventListener("click", () => {
     `crossing this screen = ${cmAcross.toFixed(1)} cm of mousepad\n\n` +
     `${verdict}. Train your ghost at ONE sens and stick to it.`
   );
+});
+
+// --- ghost gallery: upload your trained ghost, fight anyone's ---
+document.getElementById("upload-ghost").addEventListener("click", async () => {
+  if (!window.lastBrain) {
+    alert("No ghost to upload yet — press Train Ghost (or Load Brain) first.");
+    return;
+  }
+  const name = (prompt("Name your ghost (shown to everyone):") || "").trim();
+  if (!name) return;
+  try {
+    const res = await fetch("/api/ghosts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, brain: window.lastBrain }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "server error " + res.status);
+    alert(`"${data.name}" is in the gallery. Anyone on this site can fight it\nvia the Ghosts button. (The gallery resets if the server restarts.)`);
+  } catch (err) {
+    alert("Upload failed: " + err.message);
+  }
+});
+
+document.getElementById("list-ghosts").addEventListener("click", async () => {
+  try {
+    const res = await fetch("/api/ghosts");
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "server error " + res.status);
+    if (!data.ghosts.length) {
+      alert("No ghosts uploaded yet. Train one and press Upload Ghost.");
+      return;
+    }
+    const menu = data.ghosts.map((g, i) => `${i + 1}. ${g.name}`).join("\n");
+    const pick = parseInt(prompt("Pick a ghost to fight:\n\n" + menu + "\n\nnumber:"), 10);
+    if (!(pick >= 1 && pick <= data.ghosts.length)) return;
+    const chosen = data.ghosts[pick - 1];
+    const gres = await fetch("/api/ghosts/" + chosen.id);
+    const gdata = await gres.json();
+    if (!gres.ok) throw new Error(gdata.error || "server error " + gres.status);
+    Bot.setBrain(BrainLoader.build(gdata.brain));
+    document.getElementById("load-brain").textContent = "Brain: " + gdata.name;
+    alert(`You're up against "${gdata.name}". Press Duel to fight.`);
+  } catch (err) {
+    alert("Could not load ghosts: " + err.message);
+  }
 });
 
 startSession();

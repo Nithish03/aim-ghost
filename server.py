@@ -27,6 +27,20 @@ MAX_BODY = 50 * 1024 * 1024
 # GIL poorly across threads anyway and a run only takes a few seconds.
 train_lock = threading.Lock()
 
+# Ghost gallery: named brains stored as JSON files. NOTE: on free-tier hosts
+# the disk is ephemeral — ghosts survive while the instance is up and are
+# lost on restart/redeploy. Newest 50 are kept.
+GHOST_DIR = os.path.join(ROOT, "ghosts")
+os.makedirs(GHOST_DIR, exist_ok=True)
+MAX_GHOSTS = 50
+ghost_lock = threading.Lock()
+
+
+def ghost_files():
+    files = [os.path.join(GHOST_DIR, f) for f in os.listdir(GHOST_DIR)
+             if f.endswith(".json")]
+    return sorted(files, key=os.path.getmtime, reverse=True)
+
 
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
@@ -43,28 +57,68 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def do_GET(self):
+        if self.path == "/api/ghosts":
+            out = []
+            for f in ghost_files()[:MAX_GHOSTS]:
+                try:
+                    g = json.loads(open(f).read())
+                    out.append({"id": os.path.basename(f)[:-5], "name": g["name"]})
+                except (OSError, ValueError, KeyError):
+                    continue
+            self.send_json(200, {"ghosts": out})
+        elif self.path.startswith("/api/ghosts/"):
+            gid = self.path.rsplit("/", 1)[1]
+            if not gid.replace("-", "").isalnum():
+                self.send_json(400, {"error": "bad ghost id"})
+                return
+            f = os.path.join(GHOST_DIR, gid + ".json")
+            if not os.path.isfile(f):
+                self.send_json(404, {"error": "ghost not found (the gallery resets when the server restarts)"})
+                return
+            self.send_json(200, json.loads(open(f).read()))
+        else:
+            super().do_GET()
+
     def do_POST(self):
-        if self.path != "/api/train":
-            self.send_json(404, {"error": "unknown endpoint"})
-            return
         try:
             length = int(self.headers.get("Content-Length", 0))
             if not 0 < length <= MAX_BODY:
-                self.send_json(413, {"error": "session too large"})
+                self.send_json(413, {"error": "request too large"})
                 return
-            session = json.loads(self.rfile.read(length))
-            if "trajectory" not in session or "targets" not in session:
-                self.send_json(400, {"error": "not a session JSON"})
-                return
-            with train_lock:
-                brain = train_model([session], verbose=False)
-            self.send_json(200, brain)
+            body = json.loads(self.rfile.read(length))
+            if self.path == "/api/train":
+                if "trajectory" not in body or "targets" not in body:
+                    self.send_json(400, {"error": "not a session JSON"})
+                    return
+                with train_lock:
+                    brain = train_model([body], verbose=False)
+                self.send_json(200, brain)
+            elif self.path == "/api/ghosts":
+                name = str(body.get("name", "")).strip()[:24]
+                brain = body.get("brain")
+                if not name:
+                    self.send_json(400, {"error": "give your ghost a name"})
+                    return
+                if not isinstance(brain, dict) or brain.get("kind") != "aimghost-mlp":
+                    self.send_json(400, {"error": "not a trained ghost"})
+                    return
+                import uuid
+                gid = uuid.uuid4().hex[:12]
+                with ghost_lock:
+                    with open(os.path.join(GHOST_DIR, gid + ".json"), "w") as f:
+                        json.dump({"name": name, "brain": brain}, f)
+                    for old in ghost_files()[MAX_GHOSTS:]:
+                        os.remove(old)
+                self.send_json(200, {"id": gid, "name": name})
+            else:
+                self.send_json(404, {"error": "unknown endpoint"})
         except ValueError as e:
             self.send_json(400, {"error": str(e)})
         except Exception:
             import traceback
             traceback.print_exc()
-            self.send_json(500, {"error": "training failed on the server"})
+            self.send_json(500, {"error": "server error"})
 
 
 def main():

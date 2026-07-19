@@ -47,8 +47,11 @@ to wake. Fine for friends.
 **Your own box + a tunnel** (no signup, ephemeral): `python3 server.py` then
 `ngrok http 8000` and share the URL.
 
-Each visitor trains on their own play; nothing is stored server-side — the
-brain comes back in the HTTP response.
+Each visitor trains on their own play; sessions are never stored — the brain
+comes back in the HTTP response. The one exception is the **ghost gallery**:
+Upload Ghost stores your named brain on the server so friends can fight it
+via the Ghosts button. On free tiers the disk is ephemeral, so the gallery
+resets when the instance restarts — re-upload after a quiet spell.
 
 ## Other buttons
 
