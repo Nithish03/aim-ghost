@@ -194,7 +194,15 @@ trainBtn.addEventListener("click", async () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(session),
     });
-    const data = await res.json();
+    // A proxy timeout (slow free-tier host) returns an HTML error page, not
+    // JSON — turn that into a human message instead of a parse error.
+    const text = await res.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new Error("the server took too long (free hosting is slow when busy) — try again in a minute");
+    }
     if (!res.ok) throw new Error(data.error || "server error " + res.status);
     Bot.setBrain(BrainLoader.build(data));
     document.getElementById("load-brain").textContent = "Brain: yours";
