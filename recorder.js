@@ -129,6 +129,26 @@ const Recorder = (() => {
     };
   }
 
+  // End the session and return it as an object (no download) — used by the
+  // "Train Ghost" flow, which sends it to the server instead.
+  function take() {
+    if (!session) return null;
+    const v = validate();
+    const out = {
+      session_id: session.session_id,
+      started_at: session.started_at,
+      screen: session.screen,
+      refresh_hint_hz: session.refresh_hint_hz,
+      targets: session.targets,
+      trajectory: session.trajectory,
+    };
+    session = null;
+    if (!v.ok) {
+      console.warn(`[aimghost recorder] ${v.violations} non-monotonic step(s)`);
+    }
+    return out;
+  }
+
   function end() {
     const v = validate();
     const out = {
@@ -166,5 +186,5 @@ const Recorder = (() => {
     session = null;
   }
 
-  return { start, end, abort, onTargetSpawn, onTargetEnd };
+  return { start, end, take, abort, onTargetSpawn, onTargetEnd };
 })();

@@ -164,6 +164,39 @@ document.getElementById("end-session").addEventListener("click", () => {
   startSession(); // immediately begin a fresh session
 });
 
+// Train Ghost: end the session, send it to the server, get a brain back,
+// plug it into the bot. The whole practice->fight loop with no downloads.
+const trainBtn = document.getElementById("train-ghost");
+trainBtn.addEventListener("click", async () => {
+  const hitCount = hits;
+  const session = Recorder.take();
+  if (!session || hitCount < 10) {
+    alert("Practice first: hit at least 10 targets, then press Train Ghost.");
+    if (session) startSession(); // don't leave recording stopped
+    return;
+  }
+  trainBtn.disabled = true;
+  trainBtn.textContent = "Training…";
+  try {
+    const res = await fetch("/api/train", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(session),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "server error " + res.status);
+    Bot.setBrain(BrainLoader.build(data));
+    document.getElementById("load-brain").textContent = "Brain: yours";
+    alert("Ghost trained on your play. Press \"Duel\" to fight yourself.");
+  } catch (err) {
+    alert("Training failed: " + err.message +
+          "\n(Are you running via server.py? Static hosting can't train.)");
+  }
+  trainBtn.disabled = false;
+  trainBtn.textContent = "Train Ghost";
+  startSession();
+});
+
 const botBtn = document.getElementById("bot-toggle");
 const duelBtn = document.getElementById("duel-toggle");
 const hudDuel = document.getElementById("hud-duel");

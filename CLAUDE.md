@@ -84,9 +84,17 @@ All mouse data is recorded per-session as JSON:
   px/ms. **Duel mode**: shared target, player vs ghost, first click wins,
   HUD scoreboard. Duel/bot play is never recorded.
 
-Known limits: trained on ONE session. More recorded sessions + retraining
-(`python3 ml/train.py dataset.json -o ml/brain.json`) is the highest-value
-improvement; the calibration re-derives automatically on retrain.
+- **Rung 8 — Prod (`server.py`):** DONE. Stdlib ThreadingHTTPServer serves the
+  game + `POST /api/train`: session JSON in, trained brain JSON out (train.py
+  refactored to expose `train_model(sessions)`; ValueError = friendly 400).
+  "Train Ghost" button: ends session, POSTs it, auto-loads the brain into the
+  bot — practice -> Train Ghost -> Duel, no downloads. Nothing stored
+  server-side; one training at a time (lock). Deploy: `python3 server.py`
+  ($PORT honored) on Render/Railway/Fly or ngrok — see README.
+
+Known limits: brains train on ONE session per Train Ghost press. Banked
+sessions + batch retraining (`tools/merge_sessions.py` + `ml/train.py`) still
+make the strongest ghost; the calibration re-derives automatically on retrain.
 
 ## Git
 - Develop on branch `claude/aimghost-setup-iur2ga`.

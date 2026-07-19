@@ -85,23 +85,28 @@ def adam_step(params, grads, m, v, t, lr):
         p -= lr * mh / (np.sqrt(vh) + eps)
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("data", help="session JSON or merged dataset.json")
-    ap.add_argument("-o", "--output", default="brain.json")
-    args = ap.parse_args()
+def train_model(sessions, epochs=EPOCHS, verbose=True):
+    """Full pipeline: sessions -> trained + calibrated brain dict.
 
-    sessions = load_sessions(args.data)
+    Raises ValueError for data problems (not enough play), so callers — the
+    CLI below or server.py — can show a friendly message.
+    """
+    def log(msg):
+        if verbose:
+            print(msg)
+
     train_segs, val_segs = train_val_split(sessions)
+    if len(train_segs) < 6 or len(val_segs) < 1:
+        raise ValueError("Not enough data: hit at least 10 targets, then train.")
     Xtr, Ytr, norm = build_examples(train_segs)
     Xva, Yva, _ = build_examples(val_segs, norm=norm)
     norm.update(reaction_stats(train_segs))
-    print(f"reaction: median {norm['reaction_ms_median']:.0f} ms "
-          f"(std {norm['reaction_ms_std']:.0f})")
+    log(f"reaction: median {norm['reaction_ms_median']:.0f} ms "
+        f"(std {norm['reaction_ms_std']:.0f})")
 
-    print(f"train: {Xtr.shape[0]} examples from {len(train_segs)} segments; "
-          f"val: {Xva.shape[0]} from {len(val_segs)}")
-    print(f"norm: d_scale={norm['d_scale']:.3f} px/tick, dt={norm['dt_ms']} ms")
+    log(f"train: {Xtr.shape[0]} examples from {len(train_segs)} segments; "
+        f"val: {Xva.shape[0]} from {len(val_segs)}")
+    log(f"norm: d_scale={norm['d_scale']:.3f} px/tick, dt={norm['dt_ms']} ms")
 
     rng = np.random.default_rng(SEED)
     n_in = Xtr.shape[1]
@@ -110,8 +115,10 @@ def main():
     params = [W1, b1, W2, b2]
 
     err = grad_check(params, Xtr[:64], Ytr[:64])
-    print(f"gradient check: max relative error {err:.2e} "
-          f"({'OK' if err < 1e-4 else 'FAILED — do not trust this training'})")
+    log(f"gradient check: max relative error {err:.2e} "
+        f"({'OK' if err < 1e-4 else 'FAILED — do not trust this training'})")
+    if err >= 1e-4:
+        raise ValueError("Internal error: gradient check failed.")
 
     m = [np.zeros_like(p) for p in params]
     v = [np.zeros_like(p) for p in params]
@@ -120,7 +127,7 @@ def main():
     best_val = float("inf")
     best_params = [p.copy() for p in params]
     best_epoch = 0
-    for epoch in range(1, EPOCHS + 1):
+    for epoch in range(1, epochs + 1):
         order = rng.permutation(n)
         ep_loss = 0.0
         for s in range(0, n, BATCH):
@@ -142,10 +149,10 @@ def main():
             best_params = [p.copy() for p in params]
             best_epoch = epoch
         if epoch % 25 == 0 or epoch == 1:
-            print(f"epoch {epoch:4d}  train {ep_loss / n:.5f}  val {va_loss:.5f}")
+            log(f"epoch {epoch:4d}  train {ep_loss / n:.5f}  val {va_loss:.5f}")
     params = best_params
     W1, b1, W2, b2 = params
-    print(f"keeping epoch {best_epoch} weights (best val {best_val:.5f})")
+    log(f"keeping epoch {best_epoch} weights (best val {best_val:.5f})")
 
     # Calibrate ghost cruise speed to the user's real speed, then verify.
     dists = np.array([np.hypot(*(np.array(s["target"][:2]) - s["pos"][0]))
@@ -154,17 +161,25 @@ def main():
     user_px_ms = float(np.median(dists / durs))
     norm["out_scale"] = calibrate_out_scale(params, norm, user_px_ms)
     r = evaluate(params, norm, out_scale=norm["out_scale"])
-    print(f"user speed {user_px_ms:.2f} px/ms -> out_scale {norm['out_scale']:.2f}; "
-          f"sim: reach {r['reach_rate']*100:.0f}%, median {r['median_ms']:.0f} ms, "
-          f"{r['median_px_ms']:.2f} px/ms")
+    log(f"user speed {user_px_ms:.2f} px/ms -> out_scale {norm['out_scale']:.2f}; "
+        f"sim: reach {r['reach_rate']*100:.0f}%, median {r['median_ms']:.0f} ms, "
+        f"{r['median_px_ms']:.2f} px/ms")
 
-    brain = {
+    return {
         "kind": "aimghost-mlp",
         "act": "tanh",
         "norm": norm,
         "W1": W1.tolist(), "b1": b1.tolist(),
         "W2": W2.tolist(), "b2": b2.tolist(),
     }
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("data", help="session JSON or merged dataset.json")
+    ap.add_argument("-o", "--output", default="brain.json")
+    args = ap.parse_args()
+    brain = train_model(load_sessions(args.data))
     with open(args.output, "w") as f:
         json.dump(brain, f)
     print(f"wrote {args.output}")
