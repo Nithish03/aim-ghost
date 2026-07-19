@@ -45,31 +45,14 @@ const Recorder = (() => {
     traj.push([t, x, y, buttons]);
   }
 
-  // Movement: pointerrawupdate where available, else pointermove (same event
-  // stream as mousemove for a mouse, but exposes getCoalescedEvents so
-  // coalesced samples can be unpacked). Event timestamps share the
-  // performance.now() clock, so t = e.timeStamp - t0.
-  const moveEvent = "onpointerrawupdate" in window ? "pointerrawupdate" : "pointermove";
-
-  function onMove(e) {
+  // Samples come from the Aim pipeline (aim.js), which unpacks coalesced
+  // events at native rate and resolves the aim point in both normal and
+  // pointer-locked (sensitivity) modes. Event timestamps share the
+  // performance.now() clock, so t = timeStamp - t0.
+  Aim.addListener((timeStamp, x, y, buttons) => {
     if (!session) return;
-    const events = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
-    if (events.length === 0) events.push(e);
-    for (const ce of events) {
-      pushSample(ce.timeStamp - session.t0, ce.clientX, ce.clientY, ce.buttons);
-    }
-  }
-
-  // Button transitions won't appear in the move stream if the mouse is still,
-  // so record an explicit sample on every press/release.
-  function onButton(e) {
-    if (!session) return;
-    pushSample(e.timeStamp - session.t0, e.clientX, e.clientY, e.buttons);
-  }
-
-  window.addEventListener(moveEvent, onMove);
-  window.addEventListener("pointerdown", onButton);
-  window.addEventListener("pointerup", onButton);
+    pushSample(timeStamp - session.t0, x, y, buttons);
+  });
 
   function start() {
     session = {
