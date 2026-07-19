@@ -28,13 +28,24 @@ own play), and your cursor speed — recalibrated on every retrain.
 
 ## Hosting for friends
 
-Any host that runs Python works — the server binds `0.0.0.0` and honors
-`$PORT`:
+Deploy configs for the common free tiers are checked in — the server binds
+`0.0.0.0` and honors `$PORT`.
 
-- **Render / Railway / Fly**: point it at this repo; start command
-  `python3 server.py`, dependency `numpy` (requirements.txt is here).
-- **Your own box + a tunnel** (quickest): `python3 server.py` then
-  `ngrok http 8000` (or Tailscale/Cloudflare Tunnel) and share the URL.
+**Render (easiest, free):**
+1. https://dashboard.render.com -> **New** -> **Blueprint**.
+2. Connect this GitHub repo. `render.yaml` does the rest.
+3. Share the `https://aimghost-<something>.onrender.com` URL.
+
+Free tier sleeps after ~15 min idle; the first visit after that takes ~30 s
+to wake. Fine for friends.
+
+**Railway** (`Procfile`): New Project -> Deploy from GitHub repo.
+
+**Fly.io / Cloud Run / anything Docker** (`Dockerfile`):
+`fly launch` or `gcloud run deploy --source .`.
+
+**Your own box + a tunnel** (no signup, ephemeral): `python3 server.py` then
+`ngrok http 8000` and share the URL.
 
 Each visitor trains on their own play; nothing is stored server-side — the
 brain comes back in the HTTP response.
