@@ -178,6 +178,17 @@ trainBtn.addEventListener("click", async () => {
   trainBtn.disabled = true;
   trainBtn.textContent = "Training…";
   try {
+    // Self-heal a flaky page load (e.g. host waking from sleep): if brain.js
+    // never arrived, fetch it now instead of failing.
+    if (typeof BrainLoader === "undefined") {
+      await new Promise((resolve, reject) => {
+        const s = document.createElement("script");
+        s.src = "brain.js";
+        s.onload = resolve;
+        s.onerror = () => reject(new Error("could not load brain.js — refresh the page"));
+        document.body.appendChild(s);
+      });
+    }
     const res = await fetch("/api/train", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
