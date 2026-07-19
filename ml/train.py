@@ -160,6 +160,13 @@ def train_model(sessions, epochs=EPOCHS, verbose=True):
     W1, b1, W2, b2 = params
     log(f"keeping epoch {best_epoch} weights (best val {best_val:.5f})")
 
+    # Cap burst speed at the user's own 98th-percentile per-tick speed —
+    # the ghost may flick as fast as this user actually flicks, no faster.
+    norm["cap_abs"] = float(np.clip(
+        np.percentile(np.linalg.norm(Ytr, axis=1), 98), 1.5, 3.0))
+    log(f"burst cap: {norm['cap_abs']:.2f} x d_scale "
+        f"({norm['cap_abs'] * norm['d_scale']:.0f} px/tick)")
+
     # Calibrate ghost cruise speed to the user's real speed, then verify.
     dists = np.array([np.hypot(*(np.array(s["target"][:2]) - s["pos"][0]))
                       for s in train_segs])

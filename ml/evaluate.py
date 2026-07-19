@@ -13,13 +13,23 @@ CAP_ABS = 3.0     # absolute step cap, in d_scale units (must match brain.js)
 CAP_DIST = 0.35   # distance-proportional step cap (must match brain.js)
 
 
-def rollout(params, norm, start, target, out_scale=1.0, max_ticks=600):
-    """Simulate the browser rollout. Returns ticks to reach, or None."""
+def rollout(params, norm, start, target, out_scale=1.0, max_ticks=900,
+            rng=None):
+    """Simulate the browser rollout. Returns ticks to reach, or None.
+
+    Mirrors brain.js including the anti-stall history jitter — without it,
+    slower (human-matched) speeds look like failures here and the calibrator
+    is forced to pick aimbot speeds.
+    """
     W1, b1, W2, b2 = params
     K = norm["history"]
     d_scale, p_scale = norm["d_scale"], norm["p_scale"]
+    cap_abs = norm.get("cap_abs", CAP_ABS)
+    if rng is None:
+        rng = np.random.default_rng(0)
     pos = np.array(start, float)
     hist = np.zeros(2 * K)
+    stall_ticks = 0
     for t in range(max_ticks):
         rel = np.array(target) - pos
         dist = np.hypot(*rel)
@@ -32,11 +42,18 @@ def rollout(params, norm, start, target, out_scale=1.0, max_ticks=600):
         out = np.tanh(x @ W1 + b1) @ W2 + b2
         d = (R.T @ out) * d_scale * out_scale
         step = np.hypot(*d)
-        cap = min(CAP_ABS * d_scale, max(2.0, CAP_DIST * dist))
+        cap = min(cap_abs * d_scale, max(2.0, CAP_DIST * dist))
         if step > cap:
             d *= cap / step
         pos += d
         hist = np.concatenate([hist[2:], d])
+        # anti-stall, as in brain.js (0.25 s at 10 ms ticks = 25 ticks)
+        if np.hypot(*d) < 0.3 and dist > 14:
+            stall_ticks += 1
+            if stall_ticks > 25:
+                hist = hist + rng.normal(0, 0.15 * d_scale, hist.shape)
+        else:
+            stall_ticks = 0
     return None
 
 
@@ -65,22 +82,19 @@ def evaluate(params, norm, out_scale=1.0, n_cases=50, seed=42):
 
 
 def calibrate_out_scale(params, norm, user_px_ms):
-    """Find out_scale matching ghost cruise speed to the user's, by bisection.
+    """Find out_scale matching ghost cruise speed to the user's, by scan.
 
-    Only accepts a scale that keeps reach rate at 100% — matching speed is
-    pointless if the ghost stops converging.
+    Speed is not monotonic in out_scale (the governor kicks in and out), so
+    bisection mis-converges; a direct scan is cheap and robust. Only scales
+    with 100% reach rate qualify — matching speed is pointless if the ghost
+    stops converging.
     """
-    lo, hi = 0.3, 1.2
-    best = 1.0
-    for _ in range(7):
-        mid = (lo + hi) / 2
-        r = evaluate(params, norm, out_scale=mid)
+    best, best_err = 1.0, float("inf")
+    for scale in np.arange(0.5, 1.15, 0.05):
+        r = evaluate(params, norm, out_scale=float(scale), n_cases=30)
         if r["reach_rate"] < 1.0 or r["median_px_ms"] is None:
-            lo = mid  # too slow to converge reliably; speed back up
             continue
-        best = mid
-        if r["median_px_ms"] > user_px_ms:
-            hi = mid
-        else:
-            lo = mid
+        err = abs(r["median_px_ms"] - user_px_ms)
+        if err < best_err:
+            best, best_err = float(scale), err
     return best

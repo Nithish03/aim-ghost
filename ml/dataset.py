@@ -47,10 +47,18 @@ def segments(session):
         py = np.interp(grid, t, y)
         pos = np.stack([px, py], axis=1)
 
-        # Trim the reaction-time idle prefix (cursor at rest while the human
-        # perceives the target). Left in, "do nothing" dominates the dataset
-        # and the rolled-out model learns to freeze. Keep 2 rest ticks so
-        # "starting from rest" is still represented.
+        # Reaction time = when the user starts actually CLOSING on the target
+        # (15 px of distance closed), not when the cursor first twitches —
+        # post-click drift would otherwise make reactions look near-zero and
+        # the ghost feel like an aimbot.
+        dist_to_target = np.hypot(tg["x"] - pos[:, 0], tg["y"] - pos[:, 1])
+        closing = np.nonzero(dist_to_target[0] - dist_to_target > 15)[0]
+        reaction_ms = float(closing[0] * DT_MS) if len(closing) else 0.0
+
+        # Trim the idle prefix (cursor at rest while the human perceives the
+        # target). Left in, "do nothing" dominates the dataset and the
+        # rolled-out model learns to freeze. Keep 2 rest ticks so "starting
+        # from rest" is still represented.
         step = np.linalg.norm(np.diff(pos, axis=0), axis=1)
         moving = np.nonzero(step > 0.5)[0]
         if len(moving) == 0:
@@ -62,9 +70,7 @@ def segments(session):
         out.append({
             "pos": pos,
             "target": (tg["x"], tg["y"], tg["r"]),
-            # The trimmed idle prefix IS the user's reaction time for this
-            # target — kept so the ghost can be given the same delay.
-            "reaction_ms": start * DT_MS,
+            "reaction_ms": reaction_ms,
         })
     return out
 

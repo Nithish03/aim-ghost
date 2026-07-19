@@ -68,7 +68,7 @@ const BrainLoader = (() => {
       // Humans brake before the target; an un-braked overshoot puts the model
       // in states it has never seen.
       const step = Math.hypot(dx, dy);
-      const cap = Math.min(3 * dScale, Math.max(2, 0.35 * dist));
+      const cap = Math.min((w.norm.cap_abs || 3) * dScale, Math.max(2, 0.35 * dist));
       if (step > cap) {
         dx *= cap / step;
         dy *= cap / step;
