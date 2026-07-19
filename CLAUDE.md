@@ -92,6 +92,13 @@ All mouse data is recorded per-session as JSON:
   server-side; one training at a time (lock). Deploy: `python3 server.py`
   ($PORT honored) on Render/Railway/Fly or ngrok — see README.
 
+- **Rung 9 — Aim feel:** `aim.js` is now the single owner of pointer input
+  (coalesced-event unpacking lives there; recorder subscribes to it). "Aim
+  Lock" button = pointer lock with a drawn crosshair; "sens" input scales raw
+  mouse deltas (Valorant-style sensitivity; 1.00 = OS speed). First click
+  arms the lock, Esc releases. Hit tests/recording use Aim coordinates in
+  both modes, so trained ghosts stay consistent. Ghost cursor opacity reduced.
+
 Known limits: brains train on ONE session per Train Ghost press. Banked
 sessions + batch retraining (`tools/merge_sessions.py` + `ml/train.py`) still
 make the strongest ghost; the calibration re-derives automatically on retrain.

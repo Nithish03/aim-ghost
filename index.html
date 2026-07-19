@@ -22,10 +22,13 @@
     <button id="bot-toggle">Bot: off</button>
     <button id="duel-toggle">Duel: off</button>
     <button id="load-brain">Load Brain</button>
+    <button id="aim-lock">Aim Lock: off</button>
+    <label id="sens-label">sens <input id="sens" type="number" value="1.00" step="0.05" min="0.05"></label>
     <button id="back-to-game" hidden>Back to Game</button>
   </div>
   <input type="file" id="replay-file" accept=".json,application/json" hidden>
   <input type="file" id="brain-file" accept=".json,application/json" hidden>
+  <script src="aim.js"></script>
   <script src="recorder.js"></script>
   <script src="bot.js"></script>
   <script src="game.js"></script>

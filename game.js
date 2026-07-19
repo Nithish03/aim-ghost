@@ -70,8 +70,13 @@ let duelGhost = 0;
 canvas.addEventListener("pointerdown", (e) => {
   if (replayActive() || (Bot.active && !duel)) return;
   if (e.button !== 0 || !target) return;
-  const dx = e.clientX - target.x;
-  const dy = e.clientY - target.y;
+  // With Aim Lock enabled, the first click captures the mouse; Esc releases.
+  if (aimLockWanted && !Aim.locked) {
+    canvas.requestPointerLock();
+    return; // this click arms the crosshair, it doesn't shoot
+  }
+  const dx = Aim.x - target.x;
+  const dy = Aim.y - target.y;
   if (dx * dx + dy * dy <= target.r * target.r) {
     hits++;
     lastReactionMs = performance.now() - target.spawnT;
@@ -133,6 +138,17 @@ function draw(ts) {
       updateHud();
     }
     Bot.draw(ctx);
+  }
+  if (Aim.locked) {
+    // Crosshair for pointer-locked (sensitivity) mode.
+    ctx.strokeStyle = "#8f8";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(Aim.x - 9, Aim.y); ctx.lineTo(Aim.x - 3, Aim.y);
+    ctx.moveTo(Aim.x + 3, Aim.y); ctx.lineTo(Aim.x + 9, Aim.y);
+    ctx.moveTo(Aim.x, Aim.y - 9); ctx.lineTo(Aim.x, Aim.y - 3);
+    ctx.moveTo(Aim.x, Aim.y + 3); ctx.lineTo(Aim.x, Aim.y + 9);
+    ctx.stroke();
   }
   if (target) {
     ctx.beginPath();
@@ -258,6 +274,24 @@ duelBtn.addEventListener("click", () => {
     spawnTarget();
     updateHud();
   }
+});
+
+// --- sensitivity / aim lock ---
+let aimLockWanted = false;
+const lockBtn = document.getElementById("aim-lock");
+lockBtn.addEventListener("click", () => {
+  aimLockWanted = !aimLockWanted;
+  if (!aimLockWanted && Aim.locked) document.exitPointerLock();
+  lockBtn.textContent = "Aim Lock: " + (aimLockWanted ? "on" : "off");
+});
+document.addEventListener("pointerlockchange", () => {
+  lockBtn.textContent = "Aim Lock: " + (Aim.locked ? "ON" : aimLockWanted ? "on" : "off");
+});
+const sensInput = document.getElementById("sens");
+sensInput.addEventListener("change", () => {
+  const v = parseFloat(sensInput.value);
+  if (v > 0) Aim.sens = v;
+  sensInput.value = Aim.sens.toFixed(2);
 });
 
 startSession();

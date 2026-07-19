@@ -45,3 +45,18 @@ html, body {
   margin-left: 8px;
 }
 
+#sens-label {
+  font: 14px monospace;
+  color: #ddd;
+  margin-left: 8px;
+}
+
+#sens {
+  width: 56px;
+  font: 14px monospace;
+  color: #ddd;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid #555;
+  padding: 3px 4px;
+}
+

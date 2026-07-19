@@ -84,13 +84,14 @@ const Bot = (() => {
   }
 
   function draw(ctx) {
+    // Subtle by design — the ghost should be visible, not distracting.
     ctx.beginPath();
     ctx.arc(pos.x, pos.y, 5, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(120, 200, 255, 0.9)";
+    ctx.fillStyle = "rgba(120, 200, 255, 0.35)";
     ctx.fill();
     ctx.beginPath();
     ctx.arc(pos.x, pos.y, 10, 0, Math.PI * 2);
-    ctx.strokeStyle = "rgba(120, 200, 255, 0.4)";
+    ctx.strokeStyle = "rgba(120, 200, 255, 0.15)";
     ctx.stroke();
   }
 
