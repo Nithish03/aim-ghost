@@ -52,10 +52,23 @@ function spawnTarget() {
     r,
     spawnT: performance.now(),
   };
+  Recorder.onTargetSpawn(target);
 }
 
 // --- input ---
+// Replay is defined in replay.js, which loads after this script; a frame or
+// event can fire in between, so check it exists before touching it.
+function replayActive() {
+  return typeof Replay !== "undefined" && Replay.active;
+}
+
+// Duel mode: player and ghost race for the same target, first click wins.
+let duel = false;
+let duelYou = 0;
+let duelGhost = 0;
+
 canvas.addEventListener("pointerdown", (e) => {
+  if (replayActive() || (Bot.active && !duel)) return;
   if (e.button !== 0 || !target) return;
   const dx = e.clientX - target.x;
   const dy = e.clientY - target.y;
@@ -63,8 +76,10 @@ canvas.addEventListener("pointerdown", (e) => {
     hits++;
     lastReactionMs = performance.now() - target.spawnT;
     reactionTimes.push(lastReactionMs);
+    if (duel) duelYou++;
+    Recorder.onTargetEnd(target, "hit");
     spawnTarget();
-    if (hits % 10 === 0) logSummary();
+    if (!duel && hits % 10 === 0) logSummary();
   } else {
     misses++;
   }
@@ -78,6 +93,10 @@ function updateHud() {
   const total = hits + misses;
   hudAcc.textContent = total ? ((hits / total) * 100).toFixed(1) + "%" : "–";
   hudRt.textContent = lastReactionMs !== null ? lastReactionMs.toFixed(0) + " ms" : "–";
+  if (duel) {
+    document.getElementById("hud-you").textContent = duelYou;
+    document.getElementById("hud-ghost").textContent = duelGhost;
+  }
 }
 
 function logSummary() {
@@ -92,8 +111,29 @@ function logSummary() {
 }
 
 // --- render loop ---
-function draw() {
+function draw(ts) {
+  if (replayActive()) {
+    // Replay owns the canvas; just keep the loop alive.
+    requestAnimationFrame(draw);
+    return;
+  }
   ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+  if (typeof Bot !== "undefined" && Bot.active) {
+    if (Bot.update(ts, target)) {
+      // Bot clicked inside the target. No recording either way (the Recorder
+      // session is aborted while the bot is on screen).
+      if (duel) {
+        duelGhost++;
+      } else {
+        hits++;
+        lastReactionMs = performance.now() - target.spawnT;
+        reactionTimes.push(lastReactionMs);
+      }
+      spawnTarget();
+      updateHud();
+    }
+    Bot.draw(ctx);
+  }
   if (target) {
     ctx.beginPath();
     ctx.arc(target.x, target.y, target.r, 0, Math.PI * 2);
@@ -108,6 +148,98 @@ function draw() {
   requestAnimationFrame(draw);
 }
 
-spawnTarget();
-updateHud();
+// --- session control ---
+function startSession() {
+  hits = 0;
+  misses = 0;
+  lastReactionMs = null;
+  reactionTimes = [];
+  Recorder.start();
+  spawnTarget();
+  updateHud();
+}
+
+document.getElementById("end-session").addEventListener("click", () => {
+  Recorder.end(); // validates, reports, downloads JSON
+  startSession(); // immediately begin a fresh session
+});
+
+// Train Ghost: end the session, send it to the server, get a brain back,
+// plug it into the bot. The whole practice->fight loop with no downloads.
+const trainBtn = document.getElementById("train-ghost");
+trainBtn.addEventListener("click", async () => {
+  const hitCount = hits;
+  const session = Recorder.take();
+  if (!session || hitCount < 10) {
+    alert("Practice first: hit at least 10 targets, then press Train Ghost.");
+    if (session) startSession(); // don't leave recording stopped
+    return;
+  }
+  trainBtn.disabled = true;
+  trainBtn.textContent = "Training…";
+  try {
+    const res = await fetch("/api/train", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(session),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "server error " + res.status);
+    Bot.setBrain(BrainLoader.build(data));
+    document.getElementById("load-brain").textContent = "Brain: yours";
+    alert("Ghost trained on your play. Press \"Duel\" to fight yourself.");
+  } catch (err) {
+    alert("Training failed: " + err.message +
+          "\n(Are you running via server.py? Static hosting can't train.)");
+  }
+  trainBtn.disabled = false;
+  trainBtn.textContent = "Train Ghost";
+  startSession();
+});
+
+const botBtn = document.getElementById("bot-toggle");
+const duelBtn = document.getElementById("duel-toggle");
+const hudDuel = document.getElementById("hud-duel");
+
+function stopBotModes() {
+  Bot.stop();
+  duel = false;
+  botBtn.textContent = "Bot: off";
+  duelBtn.textContent = "Duel: off";
+  hudDuel.hidden = true;
+}
+
+botBtn.addEventListener("click", () => {
+  if (Bot.active) {
+    stopBotModes();
+    startSession(); // resume human play with a fresh recording
+  } else {
+    Recorder.abort(); // never record while a bot is on screen
+    Bot.start();
+    botBtn.textContent = "Bot: ON";
+    hits = 0; misses = 0; lastReactionMs = null; reactionTimes = [];
+    spawnTarget();
+    updateHud();
+  }
+});
+
+duelBtn.addEventListener("click", () => {
+  if (duel) {
+    stopBotModes();
+    startSession();
+  } else {
+    Recorder.abort(); // duel play is never recorded as training data
+    Bot.start();
+    duel = true;
+    duelYou = 0; duelGhost = 0;
+    hits = 0; misses = 0; lastReactionMs = null; reactionTimes = [];
+    duelBtn.textContent = "Duel: ON";
+    botBtn.textContent = "Bot: off";
+    hudDuel.hidden = false;
+    spawnTarget();
+    updateHud();
+  }
+});
+
+startSession();
 requestAnimationFrame(draw);

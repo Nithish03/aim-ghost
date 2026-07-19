@@ -28,3 +28,20 @@ html, body {
 #hud span {
   margin-right: 14px;
 }
+
+#controls {
+  position: fixed;
+  top: 8px;
+  right: 8px;
+}
+
+#controls button {
+  font: 14px monospace;
+  color: #ddd;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid #555;
+  padding: 4px 10px;
+  cursor: pointer;
+  margin-left: 8px;
+}
+
