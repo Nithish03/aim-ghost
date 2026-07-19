@@ -294,5 +294,34 @@ sensInput.addEventListener("change", () => {
   sensInput.value = Aim.sens.toFixed(2);
 });
 
+// "Match FPS": convert Valorant DPI + sens into our crosshair multiplier via
+// monitor-distance matching. Valorant turns 0.07 deg per count per sens with
+// a 103 deg horizontal FOV, so matching degrees to screen pixels gives
+//   multiplier = 0.07 * sens * screenWidth / 103
+// DPI cancels out of the multiplier (game and browser read the same counts;
+// assumes OS accel off / raw input) but sets the physical numbers reported.
+document.getElementById("fps-apply").addEventListener("click", () => {
+  const dpi = parseFloat(document.getElementById("fps-dpi").value);
+  const vs = parseFloat(document.getElementById("fps-sens").value);
+  if (!(dpi > 0) || !(vs > 0)) { alert("Enter a valid DPI and Valorant sens."); return; }
+  const mult = 0.07 * vs * window.innerWidth / 103;
+  Aim.sens = mult;
+  sensInput.value = mult.toFixed(3);
+  const edpi = dpi * vs;
+  const cmPer360 = 360 / (0.07 * vs * dpi / 2.54);
+  const cmAcross = (window.innerWidth / mult) / (dpi / 2.54);
+  let verdict;
+  if (cmPer360 < 20) verdict = "that's very high sens (pros are mostly 25-55 cm/360)";
+  else if (cmPer360 > 70) verdict = "that's very low sens — you'll need a big mousepad here";
+  else verdict = "that's inside the typical pro range (25-55 cm/360) — keep it";
+  alert(
+    `Matched to your Valorant feel (turn Aim Lock on to use it):\n\n` +
+    `eDPI: ${edpi.toFixed(0)}   |   ${cmPer360.toFixed(1)} cm per 360\n` +
+    `crosshair multiplier set to ${mult.toFixed(3)}\n` +
+    `crossing this screen = ${cmAcross.toFixed(1)} cm of mousepad\n\n` +
+    `${verdict}. Train your ghost at ONE sens and stick to it.`
+  );
+});
+
 startSession();
 requestAnimationFrame(draw);
