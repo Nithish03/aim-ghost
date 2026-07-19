@@ -140,6 +140,7 @@ const BrainLoader = (() => {
         return;
       }
       Bot.setBrain(build(w));
+      window.lastBrain = w; // uploadable via Upload Ghost
       document.getElementById("load-brain").textContent = "Brain: neural";
       console.log(
         `[aimghost] neural brain loaded: ${w.W1.length}->${w.b1.length}->2, ` +

@@ -99,6 +99,12 @@ All mouse data is recorded per-session as JSON:
   arms the lock, Esc releases. Hit tests/recording use Aim coordinates in
   both modes, so trained ghosts stay consistent. Ghost cursor opacity reduced.
 
+- **Rung 10 — Ghost gallery:** Upload Ghost posts the current brain (from
+  Train Ghost or Load Brain; tracked as `window.lastBrain`) to
+  `POST /api/ghosts` with a name; Ghosts button lists (`GET /api/ghosts`) and
+  loads (`GET /api/ghosts/<id>`) them into the bot. Stored as JSON files in
+  `ghosts/` (gitignored), newest 50 kept, ephemeral on free-tier disks.
+
 Known limits: brains train on ONE session per Train Ghost press. Banked
 sessions + batch retraining (`tools/merge_sessions.py` + `ml/train.py`) still
 make the strongest ghost; the calibration re-derives automatically on retrain.
