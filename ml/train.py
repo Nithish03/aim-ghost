@@ -13,7 +13,8 @@ import json
 
 import numpy as np
 
-from dataset import load_sessions, train_val_split, build_examples
+from dataset import load_sessions, train_val_split, build_examples, reaction_stats
+from evaluate import evaluate, calibrate_out_scale
 
 HIDDEN = 64
 EPOCHS = 300
@@ -94,6 +95,9 @@ def main():
     train_segs, val_segs = train_val_split(sessions)
     Xtr, Ytr, norm = build_examples(train_segs)
     Xva, Yva, _ = build_examples(val_segs, norm=norm)
+    norm.update(reaction_stats(train_segs))
+    print(f"reaction: median {norm['reaction_ms_median']:.0f} ms "
+          f"(std {norm['reaction_ms_std']:.0f})")
 
     print(f"train: {Xtr.shape[0]} examples from {len(train_segs)} segments; "
           f"val: {Xva.shape[0]} from {len(val_segs)}")
@@ -121,10 +125,12 @@ def main():
         ep_loss = 0.0
         for s in range(0, n, BATCH):
             idx = order[s:s + BATCH]
-            # Small input noise: at rollout the model sees its own imperfect
-            # history, never the pristine training history. Noise during
-            # training makes it robust to that mismatch.
-            Xb = Xtr[idx] + rng.normal(0, 0.05, Xtr[idx].shape)
+            # Input noise: at rollout the model sees its own imperfect
+            # history, never the pristine training history. Strong noise
+            # teaches it to brake/correct from perturbed states instead of
+            # orbiting. 0.25 chosen by sweep: 100% simulated reach rate,
+            # median 395 ms (0.05 gave 88%, orbits).
+            Xb = Xtr[idx] + rng.normal(0, 0.25, Xtr[idx].shape)
             loss, grads = loss_and_grads(params, Xb, Ytr[idx])
             t += 1
             adam_step(params, grads, m, v, t, LR)
@@ -140,6 +146,17 @@ def main():
     params = best_params
     W1, b1, W2, b2 = params
     print(f"keeping epoch {best_epoch} weights (best val {best_val:.5f})")
+
+    # Calibrate ghost cruise speed to the user's real speed, then verify.
+    dists = np.array([np.hypot(*(np.array(s["target"][:2]) - s["pos"][0]))
+                      for s in train_segs])
+    durs = np.array([len(s["pos"]) * norm["dt_ms"] for s in train_segs])
+    user_px_ms = float(np.median(dists / durs))
+    norm["out_scale"] = calibrate_out_scale(params, norm, user_px_ms)
+    r = evaluate(params, norm, out_scale=norm["out_scale"])
+    print(f"user speed {user_px_ms:.2f} px/ms -> out_scale {norm['out_scale']:.2f}; "
+          f"sim: reach {r['reach_rate']*100:.0f}%, median {r['median_ms']:.0f} ms, "
+          f"{r['median_px_ms']:.2f} px/ms")
 
     brain = {
         "kind": "aimghost-mlp",

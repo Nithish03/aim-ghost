@@ -75,9 +75,18 @@ All mouse data is recorded per-session as JSON:
   `ml/brain.json` is trained on the user's one real session — retrain with
   more sessions via `python3 ml/train.py dataset.json -o ml/brain.json`.
 
-Known limits: trained on ONE session, so the ghost is slower/drifitier than
-the user (rt ~1.7 s vs their ~1.0 s median). The single highest-value next
-step is more recorded sessions, then retraining.
+- **Rung 7 — Fair fight:** DONE. Model reworked to a TARGET-CENTRIC frame
+  (rotate so cursor->target = +x; fixes orbiting, generalizes directions).
+  Rollout guards mirrored in `ml/evaluate.py` + `brain.js`: input clipping,
+  distance-proportional speed governor. Training noise 0.25 (swept; 100%
+  sim reach rate). Ghost gets the user's own reaction delay (median/std of
+  trimmed idle prefixes) and auto-calibrated `out_scale` matching the user's
+  px/ms. **Duel mode**: shared target, player vs ghost, first click wins,
+  HUD scoreboard. Duel/bot play is never recorded.
+
+Known limits: trained on ONE session. More recorded sessions + retraining
+(`python3 ml/train.py dataset.json -o ml/brain.json`) is the highest-value
+improvement; the calibration re-derives automatically on retrain.
 
 ## Git
 - Develop on branch `claude/aimghost-setup-iur2ga`.

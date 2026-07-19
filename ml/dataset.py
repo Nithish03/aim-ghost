@@ -62,12 +62,29 @@ def segments(session):
         out.append({
             "pos": pos,
             "target": (tg["x"], tg["y"], tg["r"]),
+            # The trimmed idle prefix IS the user's reaction time for this
+            # target — kept so the ghost can be given the same delay.
+            "reaction_ms": start * DT_MS,
         })
     return out
 
 
+def reaction_stats(segs):
+    """Median/std of the user's reaction time, for a human-like ghost delay."""
+    r = np.array([s["reaction_ms"] for s in segs])
+    return {"reaction_ms_median": float(np.median(r)),
+            "reaction_ms_std": float(r.std())}
+
+
 def build_examples(all_segments, history=HISTORY, norm=None):
-    """Feature/label arrays from segments.
+    """Feature/label arrays from segments, in a TARGET-CENTRIC frame.
+
+    Every example is rotated so the unit vector cursor->target is +x. The
+    model therefore learns the user's approach profile (speed curve, lateral
+    wobble) independent of direction, and at rollout the frame is recomputed
+    each tick, so aiming error self-corrects instead of compounding into
+    orbits. Features: [K rotated past deltas, distance]. Label: rotated next
+    delta.
 
     History slots before a segment's start are zero-padded — matching the bot
     at rollout time, which also starts from rest with an empty history.
@@ -83,20 +100,28 @@ def build_examples(all_segments, history=HISTORY, norm=None):
         deltas = np.diff(pos, axis=0)          # (N-1, 2), px per tick
         n = len(deltas)
         for i in range(n):
+            rx, ry = tx - pos[i, 0], ty - pos[i, 1]
+            dist = np.hypot(rx, ry)
+            if dist < 1e-6:
+                continue
+            ux, uy = rx / dist, ry / dist
+            # Rotation to target frame: [[ux, uy], [-uy, ux]] @ d
+            def rot(d):
+                return np.array([ux * d[0] + uy * d[1], -uy * d[0] + ux * d[1]])
+
             hist = np.zeros((history, 2))
             k = min(i, history)
             if k:
-                hist[history - k:] = deltas[i - k:i]
-            rel = np.array([tx - pos[i, 0], ty - pos[i, 1]])
-            feats.append(np.concatenate([hist.ravel(), rel]))
-            labels.append(deltas[i])
+                hist[history - k:] = [rot(d) for d in deltas[i - k:i]]
+            feats.append(np.concatenate([hist.ravel(), [dist]]))
+            labels.append(rot(deltas[i]))
     feats = np.array(feats)
     labels = np.array(labels)
 
     if norm is None:
         d_scale = float(labels.std()) or 1.0
         norm = {"d_scale": d_scale, "p_scale": POS_SCALE,
-                "history": history, "dt_ms": DT_MS}
+                "history": history, "dt_ms": DT_MS, "frame": "target"}
     feats[:, : 2 * history] /= norm["d_scale"]
     feats[:, 2 * history:] /= norm["p_scale"]
     labels = labels / norm["d_scale"]

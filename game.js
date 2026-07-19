@@ -62,8 +62,13 @@ function replayActive() {
   return typeof Replay !== "undefined" && Replay.active;
 }
 
+// Duel mode: player and ghost race for the same target, first click wins.
+let duel = false;
+let duelYou = 0;
+let duelGhost = 0;
+
 canvas.addEventListener("pointerdown", (e) => {
-  if (replayActive() || Bot.active) return;
+  if (replayActive() || (Bot.active && !duel)) return;
   if (e.button !== 0 || !target) return;
   const dx = e.clientX - target.x;
   const dy = e.clientY - target.y;
@@ -71,9 +76,10 @@ canvas.addEventListener("pointerdown", (e) => {
     hits++;
     lastReactionMs = performance.now() - target.spawnT;
     reactionTimes.push(lastReactionMs);
+    if (duel) duelYou++;
     Recorder.onTargetEnd(target, "hit");
     spawnTarget();
-    if (hits % 10 === 0) logSummary();
+    if (!duel && hits % 10 === 0) logSummary();
   } else {
     misses++;
   }
@@ -87,6 +93,10 @@ function updateHud() {
   const total = hits + misses;
   hudAcc.textContent = total ? ((hits / total) * 100).toFixed(1) + "%" : "–";
   hudRt.textContent = lastReactionMs !== null ? lastReactionMs.toFixed(0) + " ms" : "–";
+  if (duel) {
+    document.getElementById("hud-you").textContent = duelYou;
+    document.getElementById("hud-ghost").textContent = duelGhost;
+  }
 }
 
 function logSummary() {
@@ -110,11 +120,15 @@ function draw(ts) {
   ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
   if (typeof Bot !== "undefined" && Bot.active) {
     if (Bot.update(ts, target)) {
-      // Bot clicked inside the target: same path as a player hit, but no
-      // recording (the Recorder session is aborted while the bot plays).
-      hits++;
-      lastReactionMs = performance.now() - target.spawnT;
-      reactionTimes.push(lastReactionMs);
+      // Bot clicked inside the target. No recording either way (the Recorder
+      // session is aborted while the bot is on screen).
+      if (duel) {
+        duelGhost++;
+      } else {
+        hits++;
+        lastReactionMs = performance.now() - target.spawnT;
+        reactionTimes.push(lastReactionMs);
+      }
       spawnTarget();
       updateHud();
     }
@@ -151,16 +165,44 @@ document.getElementById("end-session").addEventListener("click", () => {
 });
 
 const botBtn = document.getElementById("bot-toggle");
+const duelBtn = document.getElementById("duel-toggle");
+const hudDuel = document.getElementById("hud-duel");
+
+function stopBotModes() {
+  Bot.stop();
+  duel = false;
+  botBtn.textContent = "Bot: off";
+  duelBtn.textContent = "Duel: off";
+  hudDuel.hidden = true;
+}
+
 botBtn.addEventListener("click", () => {
   if (Bot.active) {
-    Bot.stop();
-    botBtn.textContent = "Bot: off";
+    stopBotModes();
     startSession(); // resume human play with a fresh recording
   } else {
-    Recorder.abort(); // never record bot play as human data
+    Recorder.abort(); // never record while a bot is on screen
     Bot.start();
     botBtn.textContent = "Bot: ON";
     hits = 0; misses = 0; lastReactionMs = null; reactionTimes = [];
+    spawnTarget();
+    updateHud();
+  }
+});
+
+duelBtn.addEventListener("click", () => {
+  if (duel) {
+    stopBotModes();
+    startSession();
+  } else {
+    Recorder.abort(); // duel play is never recorded as training data
+    Bot.start();
+    duel = true;
+    duelYou = 0; duelGhost = 0;
+    hits = 0; misses = 0; lastReactionMs = null; reactionTimes = [];
+    duelBtn.textContent = "Duel: ON";
+    botBtn.textContent = "Bot: off";
+    hudDuel.hidden = false;
     spawnTarget();
     updateHud();
   }
